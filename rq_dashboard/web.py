@@ -47,6 +47,8 @@ from rq.registry import (
     FinishedJobRegistry,
     StartedJobRegistry,
 )
+from rq.exceptions import NoSuchJobError
+
 from six import string_types
 
 from .legacy_config import upgrade_config
@@ -331,7 +333,11 @@ def jobs_overview(instance_number, queue_name, registry_name, per_page, page):
 
 @blueprint.route("/<int:instance_number>/view/job/<job_id>")
 def job_view(instance_number, job_id):
-    job = Job.fetch(job_id)
+    try:
+        job = Job.fetch(job_id)
+    except NoSuchJobError:
+        return make_response(render_template("rq_dashboard/not_found.html"), 404)
+
     r = make_response(
         render_template(
             "rq_dashboard/job.html",
