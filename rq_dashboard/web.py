@@ -60,34 +60,31 @@ blueprint = Blueprint(
 )
 
 
+@blueprint.record_once
+def init_blueprint(state):
+    if "redis_connection" in state.options:
+        state.app.redis_conn = state.options["redis_connection"]
+
+
 @blueprint.before_app_first_request
 def setup_rq_connection():
-    # we need to do It here instead of cli, since It may be embeded
-    upgrade_config(current_app)
-    # Getting Redis connection parameters for RQ
-    redis_url = current_app.config.get("RQ_DASHBOARD_REDIS_URL")
-    if isinstance(redis_url, string_types):
-        current_app.config["RQ_DASHBOARD_REDIS_URL"] = (redis_url,)
-        _, current_app.redis_conn = from_url((redis_url,)[0])
-    elif isinstance(redis_url, (tuple, list)):
-        _, current_app.redis_conn = from_url(redis_url[0])
-    else:
-        raise RuntimeError("No Redis configuration!")
+    if current_app.redis_conn is None:
+        # we need to do It here instead of cli, since It may be embeded
+        upgrade_config(current_app)
+        # Getting Redis connection parameters for RQ
+        redis_url = current_app.config.get("RQ_DASHBOARD_REDIS_URL")
+        if isinstance(redis_url, string_types):
+            current_app.config["RQ_DASHBOARD_REDIS_URL"] = (redis_url,)
+            _, current_app.redis_conn = from_url((redis_url,)[0])
+        elif isinstance(redis_url, (tuple, list)):
+            _, current_app.redis_conn = from_url(redis_url[0])
+        else:
+            raise RuntimeError("No Redis configuration!")
 
 
 @blueprint.before_request
 def push_rq_connection():
-    new_instance_number = request.view_args.get("instance_number")
-    if new_instance_number is not None:
-        redis_url = current_app.config.get("RQ_DASHBOARD_REDIS_URL")
-        if new_instance_number < len(redis_url):
-            _, new_instance = from_url(redis_url[new_instance_number])
-        else:
-            raise LookupError("Index exceeds RQ list. Not Permitted.")
-    else:
-        new_instance = current_app.redis_conn
-    push_connection(new_instance)
-    current_app.redis_conn = new_instance
+    push_connection(current_app.redis_conn)
 
 
 @blueprint.teardown_request
